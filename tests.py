@@ -8,7 +8,7 @@ import unittest
 class TestTcpMultiplexConnection(unittest.TestCase):
 
 	def setUp(self):
-		self.m = tcp_multiplex.TcpMultiplex()
+		self.m = tcp_multiplex.TcpMultiplex(in_host='localhost')
 		self.t = threading.Thread(target=self.m.run, args=(.1,))
 		self.t.start()
 

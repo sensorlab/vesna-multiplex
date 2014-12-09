@@ -94,7 +94,13 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 
 class TcpMultiplex(object):
 
-	def __init__(self):
+	def __init__(self, in_port=2102, out_port=2101, in_host='', out_host='localhost'):
+		self.in_port = in_port
+		self.out_port = out_port
+
+		self.in_host = in_host
+		self.out_host = out_host
+
 		self.out_sockets = MultiSocket()
 		self.in_sockets = MultiSocket()
 
@@ -103,11 +109,9 @@ class TcpMultiplex(object):
 
 	def run(self, poll_interval=.5):
 		print "start"
-		port = 2101
-		#ThreadingTCPServer.allow_reuse_address = True
-		self.in_server = ThreadingTCPServer(("", 2102), TCPInHandler)
+		self.in_server = ThreadingTCPServer((self.in_host, self.in_port), TCPInHandler)
 		self.in_server.m = self
-		self.out_server = ThreadingTCPServer(("", port), TCPOutHandler)
+		self.out_server = ThreadingTCPServer((self.out_host, self.out_port), TCPOutHandler)
 		self.out_server.m = self
 
 		self.in_thread = threading.Thread(target=self.in_server.serve_forever, args=(poll_interval,))
