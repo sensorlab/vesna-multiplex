@@ -1,9 +1,12 @@
+import logging
 import serial
 import socket
 import tcp_multiplex
 import threading
 import time
 import unittest
+
+#logging.basicConfig(level=logging.DEBUG)
 
 class TestTcpMultiplexConnection(unittest.TestCase):
 

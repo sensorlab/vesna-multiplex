@@ -1,6 +1,9 @@
+import logging
 import socket
 import SocketServer
 import threading
+
+log = logging.getLogger(__name__)
 
 class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 	allow_reuse_address = True
@@ -54,7 +57,7 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		print "reader"
+		log.info("[out] connect %s:%d" % self.client_address)
 
 		in_sockets = self.server.m.in_sockets
 		out_sockets = self.server.m.out_sockets
@@ -62,6 +65,8 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 		out_sockets.add(conn)
 
 		for cmd in iterlines(conn):
+			log.debug("[out] cmd=%r" % (cmd,))
+
 			cmd = cmd.strip()
 			if cmd == '?ping':
 				self.server.m.out_sockets.sendall_one(conn, 'ok\n')
@@ -72,6 +77,8 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 			else:
 				self.server.m.in_sockets.sendall(cmd+'\n')
 
+		log.info("[out] disconnect %s:%d" % self.client_address)
+
 		out_sockets.remove(conn)
 
 class TCPInHandler(SocketServer.BaseRequestHandler):
@@ -79,6 +86,8 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
+		log.info("[inp] connect %s:%d" % self.client_address)
+
 		self.server.m.in_sockets.add(conn)
 
 		while True:
@@ -86,9 +95,11 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 			if not resp:
 				break
 
-			print resp
+			log.debug("[inp] recv=%r" % (resp,))
 
 			self.server.m.out_sockets.sendall(resp)
+
+		log.info("[inp] disconnect %s:%d" % self.client_address)
 
 		self.server.m.in_sockets.remove(conn)
 
@@ -108,7 +119,7 @@ class TcpMultiplex(object):
 		self.is_running.acquire()
 
 	def run(self, poll_interval=.5):
-		print "start"
+		log.info("Listening on: inp=%s:%d out=%s:%d" % (self.in_host, self.in_port, self.out_host, self.out_port))
 		self.in_server = ThreadingTCPServer((self.in_host, self.in_port), TCPInHandler)
 		self.in_server.m = self
 		self.out_server = ThreadingTCPServer((self.out_host, self.out_port), TCPOutHandler)
@@ -125,9 +136,10 @@ class TcpMultiplex(object):
 		self.in_thread.join()
 		self.out_thread.join()
 
+		log.info("Stopping")
+
 		self.in_server.server_close()
 		self.out_server.server_close()
-		print "exit"
 
 	def stop(self):
 		self.in_server.shutdown()
