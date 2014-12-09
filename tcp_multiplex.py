@@ -66,98 +66,108 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		log.info("[out] connect %s:%d" % self.client_address)
+		log.info("[west] connect %s:%d" % self.client_address)
 
-		in_sockets = self.server.m.in_sockets
-		out_sockets = self.server.m.out_sockets
+		east_sockets = self.server.m.east_sockets
+		west_sockets = self.server.m.west_sockets
 
-		out_sockets.add(conn)
+		west_sockets.add(conn)
 
 		for cmd in iterlines(conn):
-			log.debug("[out] cmd=%r" % (cmd,))
+			log.debug("[west] cmd=%r" % (cmd,))
 
-			cmd = cmd.strip()
-			if cmd == '?ping':
-				self.server.m.out_sockets.sendall_one(conn, 'ok\n')
-			elif cmd == '?nin':
-				self.server.m.out_sockets.sendall_one(conn, '%d\n' % (in_sockets.num(),))
-			elif cmd == '?nout':
-				self.server.m.out_sockets.sendall_one(conn, '%d\n' % (out_sockets.num(),))
+			if cmd.startswith('?'):
+				resp = self.command(cmd.strip())
+				log.debug("[west] resp=%r" % (resp,))
+				west_sockets.sendall_one(conn, resp)
 			else:
-				self.server.m.in_sockets.sendall(cmd+'\n')
+				east_sockets.sendall(cmd+'\n')
 
 		log.info("[out] disconnect %s:%d" % self.client_address)
 
-		out_sockets.remove(conn)
+		west_sockets.remove(conn)
+
+	def command(self, cmd):
+		east_sockets = self.server.m.east_sockets
+		west_sockets = self.server.m.west_sockets
+
+		if cmd == '?ping':
+			return 'ok\n'
+		elif cmd == '?count east':
+			return '%d\nok\n' % (east_sockets.num(),)
+		elif cmd == '?count west':
+			return '%d\nok\n' % (west_sockets.num(),)
+		else:
+			return 'error: unknown multiplexer command %r' % (cmd,)
 
 class TCPInHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		log.info("[inp] connect %s:%d" % self.client_address)
+		log.info("[east] connect %s:%d" % self.client_address)
 
-		self.server.m.in_sockets.add(conn)
+		self.server.m.east_sockets.add(conn)
 
 		while True:
 			resp = conn.recv(1024)
 			if not resp:
 				break
 
-			log.debug("[inp] recv=%r" % (resp,))
+			log.debug("[east] recv=%r" % (resp,))
 
-			self.server.m.out_sockets.sendall(resp)
+			self.server.m.west_sockets.sendall(resp)
 
-		log.info("[inp] disconnect %s:%d" % self.client_address)
+		log.info("[east] disconnect %s:%d" % self.client_address)
 
-		self.server.m.in_sockets.remove(conn)
+		self.server.m.east_sockets.remove(conn)
 
 class TcpMultiplex(object):
 
-	def __init__(self, in_port=2102, out_port=2101, in_host='', out_host='localhost'):
-		self.in_port = in_port
-		self.out_port = out_port
+	def __init__(self, east_port=2102, west_port=2101, east_host='', west_host='localhost'):
+		self.east_port = east_port
+		self.west_port = west_port
 
-		self.in_host = in_host
-		self.out_host = out_host
+		self.east_host = east_host
+		self.west_host = west_host
 
-		self.out_sockets = MultiSocket()
-		self.in_sockets = MultiSocket()
+		self.west_sockets = MultiSocket()
+		self.east_sockets = MultiSocket()
 
 		self.is_running = threading.Lock()
 		self.is_running.acquire()
 
 	def run(self, poll_interval=.5):
-		log.info("Listening on: inp=%s:%d out=%s:%d" % (self.in_host, self.in_port, self.out_host, self.out_port))
-		self.in_server = ThreadingTCPServer((self.in_host, self.in_port), TCPInHandler)
-		self.in_server.m = self
-		self.out_server = ThreadingTCPServer((self.out_host, self.out_port), TCPOutHandler)
-		self.out_server.m = self
+		log.info("Listening on: east=%s:%d west=%s:%d" % (self.east_host, self.east_port, self.west_host, self.west_port))
+		self.east_server = ThreadingTCPServer((self.east_host, self.east_port), TCPInHandler)
+		self.east_server.m = self
+		self.west_server = ThreadingTCPServer((self.west_host, self.west_port), TCPOutHandler)
+		self.west_server.m = self
 
-		self.in_thread = threading.Thread(target=self.in_server.serve_forever, args=(poll_interval,))
-		self.out_thread = threading.Thread(target=self.out_server.serve_forever, args=(poll_interval,))
+		self.east_thread = threading.Thread(target=self.east_server.serve_forever, args=(poll_interval,))
+		self.west_thread = threading.Thread(target=self.west_server.serve_forever, args=(poll_interval,))
 
-		self.in_thread.start()
-		self.out_thread.start()
+		self.east_thread.start()
+		self.west_thread.start()
 
 		self.is_running.release()
 
 		# allow for signal processing
 		while True:
-			self.in_thread.join(.2)
-			if not self.in_thread.isAlive():
+			self.east_thread.join(.2)
+			if not self.east_thread.isAlive():
 				break
 
-		self.out_thread.join()
+		self.west_thread.join()
 
 		log.info("Stopping")
 
-		self.in_server.server_close()
-		self.out_server.server_close()
+		self.east_server.server_close()
+		self.west_server.server_close()
 
 	def stop(self):
-		self.in_server.shutdown()
-		self.out_server.shutdown()
+		self.east_server.shutdown()
+		self.west_server.shutdown()
 
 def main():
 	parser = argparse.ArgumentParser(description="multiplex a TCP connection to multiple clients.")
@@ -176,8 +186,8 @@ def main():
 
 	logging.basicConfig(level=logging.INFO)
 
-	m = TcpMultiplex(in_port=args.east_port, in_host=args.east_host,
-			out_port=args.west_port, out_host=args.west_host)
+	m = TcpMultiplex(east_port=args.east_port, east_host=args.east_host,
+			west_port=args.west_port, west_host=args.west_host)
 
 	def handler(signum, frame):
 		log.warning("Signal %d caught! Stopping scan..." % (signum,))

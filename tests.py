@@ -6,21 +6,21 @@ import threading
 import time
 import unittest
 
-#logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 class TestTcpMultiplexConnection(unittest.TestCase):
 
 	def setUp(self):
-		self.m = tcp_multiplex.TcpMultiplex(in_host='localhost')
+		self.m = tcp_multiplex.TcpMultiplex(east_host='localhost')
 		self.t = threading.Thread(target=self.m.run, args=(.1,))
 		self.t.start()
 
 		self.m.is_running.acquire()
 
-	def _in_comm(self):
+	def _east_comm(self):
 		return serial.serial_for_url("socket://localhost:2102", timeout=60)
 
-	def _out_comm(self):
+	def _west_comm(self):
 		return serial.serial_for_url("socket://localhost:2101", timeout=60)
 
 	def tearDown(self):
@@ -29,7 +29,7 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 
 	def _test_ping(self, N):
 
-		comm = [ self._out_comm() for n in xrange(N) ]
+		comm = [ self._west_comm() for n in xrange(N) ]
 
 		for c in comm:
 			c.write("?ping\n")
@@ -45,21 +45,25 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 		self._test_ping(5)
 
 	def test_info(self):
-		comm_in = self._in_comm()
-		comm_out = self._out_comm()
+		comm_in = self._east_comm()
+		comm_out = self._west_comm()
 
-		comm_out.write("?nin\n")
+		comm_out.write("?count east\n")
 		resp = comm_out.readline()
 		self.assertEqual(resp, '1\n')
+		resp = comm_out.readline()
+		self.assertEqual(resp, 'ok\n')
 
-		comm_out.write("?nout\n")
+		comm_out.write("?count west\n")
 		resp = comm_out.readline()
 		self.assertEqual(resp, '1\n')
+		resp = comm_out.readline()
+		self.assertEqual(resp, 'ok\n')
 
-	def _test_in_out(self, N):
-		comm_in = self._in_comm()
+	def _test_east_out(self, N):
+		comm_in = self._east_comm()
 
-		comm_out = [ self._out_comm() for n in xrange(N) ]
+		comm_out = [ self._west_comm() for n in xrange(N) ]
 
 		time.sleep(.1)
 
@@ -69,33 +73,33 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 			resp = c.readline()
 			self.assertEqual("DS\n", resp)
 
-	def test_in_out(self):
-		self._test_in_out(1)
+	def test_east_out(self):
+		self._test_east_out(1)
 
-	def test_in_out_many(self):
-		self._test_in_out(5)
+	def test_east_west_many(self):
+		self._test_east_out(5)
 
-	def _test_out_in(self, N):
-		comm_in = self._in_comm()
+	def _test_west_in(self, N):
+		comm_in = self._east_comm()
 
-		comm_out = [ self._out_comm() for n in xrange(N) ]
+		comm_out = [ self._west_comm() for n in xrange(N) ]
 
 		comm_out[0].write("version\n")
 
 		resp = comm_in.readline()
 		self.assertEqual("version\n", resp)
 
-	def test_out_in(self):
-		self._test_out_in(1)
+	def test_west_in(self):
+		self._test_west_in(1)
 
-	def test_out_in_many(self):
-		self._test_out_in(5)
+	def test_west_east_many(self):
+		self._test_west_in(5)
 
-	def test_out_in_close(self):
+	def test_west_east_close(self):
 		N = 5
 
-		comm_in = self._in_comm()
-		comm_out = [ self._out_comm() for n in xrange(N) ]
+		comm_in = self._east_comm()
+		comm_out = [ self._west_comm() for n in xrange(N) ]
 
 		time.sleep(1)
 
