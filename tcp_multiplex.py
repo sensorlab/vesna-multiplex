@@ -63,7 +63,7 @@ class TcpMultiplex(object):
 		self.is_running = threading.Lock()
 		self.is_running.acquire()
 
-	def run(self):
+	def run(self, poll_interval=.5):
 		print "start"
 		port = 2101
 		#ThreadingTCPServer.allow_reuse_address = True
@@ -72,8 +72,8 @@ class TcpMultiplex(object):
 		self.out_server = ThreadingTCPServer(("", port), TCPOutHandler)
 		self.out_server.m = self
 
-		self.in_thread = threading.Thread(target=self.in_server.serve_forever)
-		self.out_thread = threading.Thread(target=self.out_server.serve_forever)
+		self.in_thread = threading.Thread(target=self.in_server.serve_forever, args=(poll_interval,))
+		self.out_thread = threading.Thread(target=self.out_server.serve_forever, args=(poll_interval,))
 
 		self.in_thread.start()
 		self.out_thread.start()

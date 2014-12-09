@@ -9,7 +9,7 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 
 	def setUp(self):
 		self.m = tcp_multiplex.TcpMultiplex()
-		self.t = threading.Thread(target=self.m.run)
+		self.t = threading.Thread(target=self.m.run, args=(.1,))
 		self.t.start()
 
 		self.m.is_running.acquire()
@@ -40,7 +40,7 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 
 		comm_out = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
 
-		time.sleep(1)
+		time.sleep(.1)
 
 		comm_in.write("DS\n")
 
