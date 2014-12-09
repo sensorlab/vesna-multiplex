@@ -14,13 +14,19 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 
 		self.m.is_running.acquire()
 
+	def _in_comm(self):
+		return serial.serial_for_url("socket://localhost:2102", timeout=60)
+
+	def _out_comm(self):
+		return serial.serial_for_url("socket://localhost:2101", timeout=60)
+
 	def tearDown(self):
 		self.m.stop()
 		self.t.join()
 
 	def _test_ping(self, N):
 
-		comm = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
+		comm = [ self._out_comm() for n in xrange(N) ]
 
 		for c in comm:
 			c.write("?ping\n")
@@ -36,8 +42,8 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 		self._test_ping(5)
 
 	def test_info(self):
-		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
-		comm_out = serial.serial_for_url("socket://localhost:2101", timeout=60)
+		comm_in = self._in_comm()
+		comm_out = self._out_comm()
 
 		comm_out.write("?nin\n")
 		resp = comm_out.readline()
@@ -48,9 +54,9 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 		self.assertEqual(resp, '1\n')
 
 	def _test_in_out(self, N):
-		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
+		comm_in = self._in_comm()
 
-		comm_out = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
+		comm_out = [ self._out_comm() for n in xrange(N) ]
 
 		time.sleep(.1)
 
@@ -67,9 +73,9 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 		self._test_in_out(5)
 
 	def _test_out_in(self, N):
-		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
+		comm_in = self._in_comm()
 
-		comm_out = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
+		comm_out = [ self._out_comm() for n in xrange(N) ]
 
 		comm_out[0].write("version\n")
 
@@ -85,8 +91,8 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 	def test_out_in_close(self):
 		N = 5
 
-		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
-		comm_out = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
+		comm_in = self._in_comm()
+		comm_out = [ self._out_comm() for n in xrange(N) ]
 
 		time.sleep(1)
 
