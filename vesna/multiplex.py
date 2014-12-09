@@ -80,37 +80,37 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		log.info("[west] connect %s:%d" % self.client_address)
+		log.info("[east] connect %s:%d" % self.client_address)
 
-		east_sockets = self.server.m.east_sockets
 		west_sockets = self.server.m.west_sockets
+		east_sockets = self.server.m.east_sockets
 
-		west_sockets.add(conn)
+		east_sockets.add(conn)
 
 		for cmd in iterlines(conn):
-			log.debug("[west] cmd=%r" % (cmd,))
+			log.debug("[east] cmd=%r" % (cmd,))
 
 			if cmd.startswith('?'):
 				resp = self.command(cmd.strip())
-				log.debug("[west] resp=%r" % (resp,))
-				west_sockets.sendall_one(conn, resp)
+				log.debug("[east] resp=%r" % (resp,))
+				east_sockets.sendall_one(conn, resp)
 			else:
-				east_sockets.sendall(cmd+'\n')
+				west_sockets.sendall(cmd+'\n')
 
-		log.info("[west] disconnect %s:%d" % self.client_address)
+		log.info("[east] disconnect %s:%d" % self.client_address)
 
-		west_sockets.remove(conn)
+		east_sockets.remove(conn)
 
 	def command(self, cmd):
-		east_sockets = self.server.m.east_sockets
 		west_sockets = self.server.m.west_sockets
+		east_sockets = self.server.m.east_sockets
 
 		if cmd == '?ping':
 			return 'ok\n'
-		elif cmd == '?count east':
-			return '%d\nok\n' % (east_sockets.num(),)
 		elif cmd == '?count west':
 			return '%d\nok\n' % (west_sockets.num(),)
+		elif cmd == '?count east':
+			return '%d\nok\n' % (east_sockets.num(),)
 		else:
 			return 'error: unknown multiplexer command %r' % (cmd,)
 
@@ -119,97 +119,97 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		log.info("[east] connect %s:%d" % self.client_address)
+		log.info("[west] connect %s:%d" % self.client_address)
 
-		self.server.m.east_sockets.add(conn)
+		self.server.m.west_sockets.add(conn)
 
 		while True:
 			resp = conn.recv(1024)
 			if not resp:
 				break
 
-			log.debug("[east] recv=%r" % (resp,))
+			log.debug("[west] recv=%r" % (resp,))
 
-			self.server.m.west_sockets.sendall(resp)
+			self.server.m.east_sockets.sendall(resp)
 
-		log.info("[east] disconnect %s:%d" % self.client_address)
+		log.info("[west] disconnect %s:%d" % self.client_address)
 
-		self.server.m.east_sockets.remove(conn)
+		self.server.m.west_sockets.remove(conn)
 
 class VESNAMultiplex(object):
 
-	def __init__(self, east_port=2102, west_port=2101, east_host='', west_host='localhost'):
-		self.east_port = east_port
+	def __init__(self, west_port=2102, east_port=2101, west_host='', east_host='localhost'):
 		self.west_port = west_port
+		self.east_port = east_port
 
-		self.east_host = east_host
 		self.west_host = west_host
+		self.east_host = east_host
 
-		self.west_sockets = MultiSocket()
 		self.east_sockets = MultiSocket()
+		self.west_sockets = MultiSocket()
 
 		self.is_running = threading.Lock()
 		self.is_running.acquire()
 
 	def run(self, poll_interval=.5):
-		log.info("Listening on: east=%s:%d west=%s:%d" % (self.east_host, self.east_port, self.west_host, self.west_port))
-		self.east_server = ThreadingTCPServer((self.east_host, self.east_port), TCPInHandler)
-		self.east_server.m = self
-		self.west_server = ThreadingTCPServer((self.west_host, self.west_port), TCPOutHandler)
+		log.info("Listening on: west=%s:%d east=%s:%d" % (self.west_host, self.west_port, self.east_host, self.east_port))
+		self.west_server = ThreadingTCPServer((self.west_host, self.west_port), TCPInHandler)
 		self.west_server.m = self
+		self.east_server = ThreadingTCPServer((self.east_host, self.east_port), TCPOutHandler)
+		self.east_server.m = self
 
-		self.east_thread = threading.Thread(target=self.east_server.serve_forever, args=(poll_interval,))
 		self.west_thread = threading.Thread(target=self.west_server.serve_forever, args=(poll_interval,))
+		self.east_thread = threading.Thread(target=self.east_server.serve_forever, args=(poll_interval,))
 
-		self.east_thread.start()
 		self.west_thread.start()
+		self.east_thread.start()
 
 		self.is_running.release()
 
 		# allow for signal processing
 		while True:
-			self.east_thread.join(.2)
-			if not self.east_thread.isAlive():
+			self.west_thread.join(.2)
+			if not self.west_thread.isAlive():
 				break
 
-		self.west_thread.join()
+		self.east_thread.join()
 
 		log.info("Closing sockets")
 
-		self.east_sockets.shutdown(socket.SHUT_RDWR)
 		self.west_sockets.shutdown(socket.SHUT_RDWR)
+		self.east_sockets.shutdown(socket.SHUT_RDWR)
 
-		self.east_server.server_close()
 		self.west_server.server_close()
+		self.east_server.server_close()
 
-		self.east_sockets.close()
 		self.west_sockets.close()
+		self.east_sockets.close()
 
 		log.info("Stopped")
 
 	def stop(self):
-		self.east_server.shutdown()
 		self.west_server.shutdown()
+		self.east_server.shutdown()
 
 def main():
 	parser = argparse.ArgumentParser(description="multiplex a TCP connection to multiple clients.")
 
-	parser.add_argument('--east-port', metavar='PORT', type=int, default=EAST_PORT, dest='east_port',
+	parser.add_argument('--west-port', metavar='PORT', type=int, default=EAST_PORT, dest='west_port',
 			help="port to listen on for connection from a device")
-	parser.add_argument('--east-if', metavar='ADDR', default=EAST_HOST, dest='east_host',
+	parser.add_argument('--west-if', metavar='ADDR', default=EAST_HOST, dest='west_host',
 			help="interface to listen on for connection from a device")
 
-	parser.add_argument('--west-port', metavar='PORT', type=int, default=WEST_PORT, dest='west_port',
-			help="port to listen on for connection from clients")
-	parser.add_argument('--west-if', metavar='ADDR', default=WEST_HOST, dest='west_host',
-			help="interface to listen on for connection from clients")
+	parser.add_argument('--east-port', metavar='PORT', type=int, default=WEST_PORT, dest='east_port',
+			help="port to listen on for connections from clients")
+	parser.add_argument('--east-if', metavar='ADDR', default=WEST_HOST, dest='east_host',
+			help="interface to listen on for connections from clients")
 
 	args = parser.parse_args()
 
 	logging.basicConfig(level=logging.INFO)
 
-	m = VESNAMultiplex(east_port=args.east_port, east_host=args.east_host,
-			west_port=args.west_port, west_host=args.west_host)
+	m = VESNAMultiplex(west_port=args.west_port, west_host=args.west_host,
+			east_port=args.east_port, east_host=args.east_host)
 
 	def handler(signum, frame):
 		log.warning("Signal %d caught! Stopping scan..." % (signum,))
