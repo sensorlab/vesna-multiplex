@@ -1,9 +1,18 @@
+import argparse
 import logging
+import signal
 import socket
 import SocketServer
 import threading
 
 log = logging.getLogger(__name__)
+
+# defaults
+EAST_PORT=2102
+EAST_HOST=""
+
+WEST_PORT=2101
+WEST_HOST="localhost"
 
 class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 	allow_reuse_address = True
@@ -133,7 +142,12 @@ class TcpMultiplex(object):
 
 		self.is_running.release()
 
-		self.in_thread.join()
+		# allow for signal processing
+		while True:
+			self.in_thread.join(.2)
+			if not self.in_thread.isAlive():
+				break
+
 		self.out_thread.join()
 
 		log.info("Stopping")
@@ -144,3 +158,35 @@ class TcpMultiplex(object):
 	def stop(self):
 		self.in_server.shutdown()
 		self.out_server.shutdown()
+
+def main():
+	parser = argparse.ArgumentParser(description="multiplex a TCP connection to multiple clients.")
+
+	parser.add_argument('--east-port', metavar='PORT', type=int, default=EAST_PORT, dest='east_port',
+			help="port to listen on for connection from a device")
+	parser.add_argument('--east-if', metavar='ADDR', default=EAST_HOST, dest='east_host',
+			help="interface to listen on for connection from a device")
+
+	parser.add_argument('--west-port', metavar='PORT', type=int, default=WEST_PORT, dest='west_port',
+			help="port to listen on for connection from clients")
+	parser.add_argument('--west-if', metavar='ADDR', default=WEST_HOST, dest='west_host',
+			help="interface to listen on for connection from clients")
+
+	args = parser.parse_args()
+
+	logging.basicConfig(level=logging.INFO)
+
+	m = TcpMultiplex(in_port=args.east_port, in_host=args.east_host,
+			out_port=args.west_port, out_host=args.west_host)
+
+	def handler(signum, frame):
+		log.warning("Signal %d caught! Stopping scan..." % (signum,))
+		m.stop()
+
+	signal.signal(signal.SIGTERM, handler)
+	signal.signal(signal.SIGINT, handler)
+
+	m.run()
+
+if __name__ == "__main__":
+	main()
