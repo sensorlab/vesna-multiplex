@@ -19,20 +19,22 @@ class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 
 class MultiSocket(object):
 	def __init__(self):
-		self.sockets = {}
+		self.sockets = set()
 		self.lock = threading.Lock()
 
 	def num(self):
 		return len(self.sockets)
 
 	def add(self, socket):
-		fd = socket.fileno()
-		assert fd not in self.sockets
-		self.sockets[fd] = socket
+		assert socket not in self.sockets
+		self.lock.acquire()
+		self.sockets.add(socket)
+		self.lock.release()
 
 	def remove(self, socket):
-		fd = socket.fileno()
-		del self.sockets[fd]
+		self.lock.acquire()
+		self.sockets.remove(socket)
+		self.lock.release()
 
 	def sendall_one(self, s, string):
 		self.lock.acquire()
@@ -41,11 +43,23 @@ class MultiSocket(object):
 
 	def sendall(self, string):
 		self.lock.acquire()
-		for s in self.sockets.itervalues():
+		for s in self.sockets:
 			try:
 				s.sendall(string)
 			except socket.error:
 				pass
+		self.lock.release()
+
+	def shutdown(self, how):
+		self.lock.acquire()
+		for s in self.sockets:
+			s.shutdown(how)
+		self.lock.release()
+
+	def close(self):
+		self.lock.acquire()
+		for s in self.sockets:
+			s.close()
 		self.lock.release()
 
 def iterlines(s):
@@ -160,10 +174,18 @@ class VESNAMultiplex(object):
 
 		self.west_thread.join()
 
-		log.info("Stopping")
+		log.info("Closing sockets")
+
+		self.east_sockets.shutdown(socket.SHUT_RDWR)
+		self.west_sockets.shutdown(socket.SHUT_RDWR)
 
 		self.east_server.server_close()
 		self.west_server.server_close()
+
+		self.east_sockets.close()
+		self.west_sockets.close()
+
+		log.info("Stopped")
 
 	def stop(self):
 		self.east_server.shutdown()
