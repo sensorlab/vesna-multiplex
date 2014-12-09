@@ -31,6 +31,9 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 					cmd = cmd.strip()
 					if cmd == '?ping':
 						conn.send('ok\n')
+					else:
+						for s in self.server.m.in_sockets:
+							s.sendall(cmd+'\n')
 
 				buff = cmds[-1]
 
@@ -39,6 +42,8 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
+		self.server.m.in_sockets.append(conn)
+
 		while True:
 			resp = conn.recv(1024)
 			if not resp:
@@ -53,6 +58,7 @@ class TcpMultiplex(object):
 
 	def __init__(self):
 		self.out_sockets = []
+		self.in_sockets = []
 
 	def run(self):
 		print "start"

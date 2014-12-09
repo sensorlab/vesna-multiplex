@@ -53,6 +53,22 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 	def test_in_out_many(self):
 		self._test_in_out(5)
 
+	def _test_out_in(self, N):
+		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
+
+		comm_out = [ serial.serial_for_url("socket://localhost:2101", timeout=60) for n in xrange(N) ]
+
+		comm_out[0].write("version\n")
+
+		resp = comm_in.readline()
+		self.assertEqual("version\n", resp)
+
+	def test_out_in(self):
+		self._test_out_in(1)
+
+	def test_out_in_many(self):
+		self._test_out_in(5)
+
 class TestTcpMultiplexStatic(unittest.TestCase):
 
 	def xest_reader_ping(self):
