@@ -114,31 +114,5 @@ class TestVESNAMultiplexConnection(unittest.TestCase):
 			resp = c.readline()
 			self.assertEqual("DS 2\n", resp)
 
-class TestVESNAMultiplexStatic(unittest.TestCase):
-
-	def xest_reader_ping(self):
-		m = vesna.multiplex.VESNAMultiplex()
-
-		class MockConn:
-			def __init__(self):
-				self.cnt = -1
-				self.b = ""
-
-			def recv(self, n):
-				self.cnt += 1
-				if self.cnt == 0:
-					return "?ping\n"
-				else:
-					m.stop()
-					raise socket.timeout
-
-			def send(self, b):
-				self.b += b
-
-		c = MockConn()
-		m.reader(c)
-
-		self.assertEqual("ok\n", c.b)
-
 if __name__ == '__main__':
 	unittest.main()
