@@ -122,7 +122,7 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 
 		self.server.m.east_sockets.remove(conn)
 
-class TcpMultiplex(object):
+class VESNAMultiplex(object):
 
 	def __init__(self, east_port=2102, west_port=2101, east_host='', west_host='localhost'):
 		self.east_port = east_port
@@ -186,7 +186,7 @@ def main():
 
 	logging.basicConfig(level=logging.INFO)
 
-	m = TcpMultiplex(east_port=args.east_port, east_host=args.east_host,
+	m = VESNAMultiplex(east_port=args.east_port, east_host=args.east_host,
 			west_port=args.west_port, west_host=args.west_host)
 
 	def handler(signum, frame):

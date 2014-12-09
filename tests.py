@@ -1,17 +1,17 @@
 import logging
 import serial
 import socket
-import tcp_multiplex
+import vesna_multiplex
 import threading
 import time
 import unittest
 
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
-class TestTcpMultiplexConnection(unittest.TestCase):
+class TestVESNAMultiplexConnection(unittest.TestCase):
 
 	def setUp(self):
-		self.m = tcp_multiplex.TcpMultiplex(east_host='localhost')
+		self.m = vesna_multiplex.VESNAMultiplex(east_host='localhost')
 		self.t = threading.Thread(target=self.m.run, args=(.1,))
 		self.t.start()
 
@@ -114,10 +114,10 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 			resp = c.readline()
 			self.assertEqual("DS 2\n", resp)
 
-class TestTcpMultiplexStatic(unittest.TestCase):
+class TestVESNAMultiplexStatic(unittest.TestCase):
 
 	def xest_reader_ping(self):
-		m = tcp_multiplex.TcpMultiplex()
+		m = vesna_multiplex.VESNAMultiplex()
 
 		class MockConn:
 			def __init__(self):
