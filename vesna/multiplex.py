@@ -83,7 +83,7 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 			else:
 				east_sockets.sendall(cmd+'\n')
 
-		log.info("[out] disconnect %s:%d" % self.client_address)
+		log.info("[west] disconnect %s:%d" % self.client_address)
 
 		west_sockets.remove(conn)
 
