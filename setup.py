@@ -10,5 +10,10 @@ setup(name='vesna_multiplex',
 	author='Tomaz Solc',
 	author_email='tomaz.solc@ijs.si',
 	packages = [ 'vesna' ],
+	entry_points = {
+		'console_scripts': [
+			'vesna_multiplex = vesna.multiplex:main'
+		]
+	},
 	test_suite = 'tests',
 )
