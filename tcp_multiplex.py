@@ -3,8 +3,7 @@ import SocketServer
 import threading
 
 class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
-	#allow_reuse_address = True
-	pass
+	allow_reuse_address = True
 
 class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
@@ -12,7 +11,10 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 
 	def reader(self, conn):
 		print "reader"
+
 		conn.settimeout(1.)
+		self.server.m.out_sockets.append(conn)
+
 		buff = ""
 		while True:
 			try:
@@ -39,19 +41,37 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 
 class TCPInHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
-		pass
+		self.reader(self.request)
+
+	def reader(self, conn):
+		conn.settimeout(1.)
+		while True:
+			try:
+				resp = conn.recv(1024)
+			except socket.timeout:
+				continue
+
+			if not resp:
+				break
+
+			print resp
+
+			for s in self.server.m.out_sockets:
+				s.sendall(resp)
 
 class TcpMultiplex(object):
 
 	def __init__(self):
-		pass
+		self.out_sockets = []
 
 	def run(self):
 		print "start"
 		port = 2101
 		#ThreadingTCPServer.allow_reuse_address = True
 		self.in_server = ThreadingTCPServer(("", 2102), TCPInHandler)
+		self.in_server.m = self
 		self.out_server = ThreadingTCPServer(("", port), TCPOutHandler)
+		self.out_server.m = self
 
 		self.in_thread = threading.Thread(target=self.in_server.serve_forever)
 		self.out_thread = threading.Thread(target=self.out_server.serve_forever)
