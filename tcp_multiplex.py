@@ -5,6 +5,29 @@ import threading
 class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
 	allow_reuse_address = True
 
+class MultiSocket(object):
+	def __init__(self):
+		self.sockets = {}
+		self.lock = threading.Lock()
+
+	def add(self, socket):
+		fd = socket.fileno()
+		assert fd not in self.sockets
+		self.sockets[fd] = socket
+
+	def remove(self, socket):
+		fd = socket.fileno()
+		del self.sockets[fd]
+
+	def sendall(self, string):
+		self.lock.acquire()
+		for s in self.sockets.itervalues():
+			try:
+				s.sendall(string)
+			except socket.error:
+				pass
+		self.lock.release()
+
 class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
 		self.reader(self.request)
@@ -12,7 +35,7 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def reader(self, conn):
 		print "reader"
 
-		self.server.m.out_sockets.append(conn)
+		self.server.m.out_sockets.add(conn)
 
 		buff = ""
 		while True:
@@ -32,17 +55,18 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 					if cmd == '?ping':
 						conn.send('ok\n')
 					else:
-						for s in self.server.m.in_sockets:
-							s.sendall(cmd+'\n')
+						self.server.m.in_sockets.sendall(cmd+'\n')
 
 				buff = cmds[-1]
+
+		self.server.m.out_sockets.remove(conn)
 
 class TCPInHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		self.server.m.in_sockets.append(conn)
+		self.server.m.in_sockets.add(conn)
 
 		while True:
 			resp = conn.recv(1024)
@@ -51,14 +75,15 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 
 			print resp
 
-			for s in self.server.m.out_sockets:
-				s.sendall(resp)
+			self.server.m.out_sockets.sendall(resp)
+
+		self.server.m.in_sockets.remove(conn)
 
 class TcpMultiplex(object):
 
 	def __init__(self):
-		self.out_sockets = []
-		self.in_sockets = []
+		self.out_sockets = MultiSocket()
+		self.in_sockets = MultiSocket()
 
 		self.is_running = threading.Lock()
 		self.is_running.acquire()
