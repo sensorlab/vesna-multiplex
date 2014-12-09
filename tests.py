@@ -11,7 +11,8 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 		self.m = tcp_multiplex.TcpMultiplex()
 		self.t = threading.Thread(target=self.m.run)
 		self.t.start()
-		time.sleep(1)
+
+		self.m.is_running.acquire()
 
 	def tearDown(self):
 		self.m.stop()

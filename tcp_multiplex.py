@@ -60,6 +60,9 @@ class TcpMultiplex(object):
 		self.out_sockets = []
 		self.in_sockets = []
 
+		self.is_running = threading.Lock()
+		self.is_running.acquire()
+
 	def run(self):
 		print "start"
 		port = 2101
@@ -74,6 +77,8 @@ class TcpMultiplex(object):
 
 		self.in_thread.start()
 		self.out_thread.start()
+
+		self.is_running.release()
 
 		self.in_thread.join()
 		self.out_thread.join()
