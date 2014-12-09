@@ -12,16 +12,11 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def reader(self, conn):
 		print "reader"
 
-		conn.settimeout(1.)
 		self.server.m.out_sockets.append(conn)
 
 		buff = ""
 		while True:
-			try:
-				resp = conn.recv(1024)
-			except socket.timeout:
-				continue
-
+			resp = conn.recv(1024)
 			if not resp:
 				break
 
@@ -44,13 +39,8 @@ class TCPInHandler(SocketServer.BaseRequestHandler):
 		self.reader(self.request)
 
 	def reader(self, conn):
-		conn.settimeout(1.)
 		while True:
-			try:
-				resp = conn.recv(1024)
-			except socket.timeout:
-				continue
-
+			resp = conn.recv(1024)
 			if not resp:
 				break
 
