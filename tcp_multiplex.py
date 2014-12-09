@@ -1,31 +1,31 @@
 import socket
+import SocketServer
 import threading
 
-class TcpMultiplex(object):
+class ThreadingTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
+	#allow_reuse_address = True
+	pass
 
-	def __init__(self):
-		self.want_stop = False
-
-	def run(self):
-		port = 2101
-
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		s.bind(("", port))
-		s.listen(1)
-		conn, addr = s.accept()
-		print 'Connected by', addr
-		conn.settimeout(1.)
-		self.reader(conn)
-		conn.close()
+class TCPOutHandler(SocketServer.BaseRequestHandler):
+	def handle(self):
+		self.reader(self.request)
 
 	def reader(self, conn):
+		print "reader"
+		conn.settimeout(1.)
 		buff = ""
-		while not self.want_stop:
+		while True:
 			try:
-				buff += conn.recv(1024)
+				resp = conn.recv(1024)
 			except socket.timeout:
 				continue
+
+			if not resp:
+				break
+
+			buff += resp
+
+			print repr(buff)
 
 			if '\n' in buff:
 				cmds = buff.split('\n')
@@ -37,5 +37,35 @@ class TcpMultiplex(object):
 
 				buff = cmds[-1]
 
+class TCPInHandler(SocketServer.BaseRequestHandler):
+	def handle(self):
+		pass
+
+class TcpMultiplex(object):
+
+	def __init__(self):
+		pass
+
+	def run(self):
+		print "start"
+		port = 2101
+		#ThreadingTCPServer.allow_reuse_address = True
+		self.in_server = ThreadingTCPServer(("", 2102), TCPInHandler)
+		self.out_server = ThreadingTCPServer(("", port), TCPOutHandler)
+
+		self.in_thread = threading.Thread(target=self.in_server.serve_forever)
+		self.out_thread = threading.Thread(target=self.out_server.serve_forever)
+
+		self.in_thread.start()
+		self.out_thread.start()
+
+		self.in_thread.join()
+		self.out_thread.join()
+
+		self.in_server.server_close()
+		self.out_server.server_close()
+		print "exit"
+
 	def stop(self):
-		self.want_stop = True
+		self.in_server.shutdown()
+		self.out_server.shutdown()
