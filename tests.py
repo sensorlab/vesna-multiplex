@@ -35,6 +35,18 @@ class TestTcpMultiplexConnection(unittest.TestCase):
 	def test_ping_many(self):
 		self._test_ping(5)
 
+	def test_info(self):
+		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
+		comm_out = serial.serial_for_url("socket://localhost:2101", timeout=60)
+
+		comm_out.write("?nin\n")
+		resp = comm_out.readline()
+		self.assertEqual(resp, '1\n')
+
+		comm_out.write("?nout\n")
+		resp = comm_out.readline()
+		self.assertEqual(resp, '1\n')
+
 	def _test_in_out(self, N):
 		comm_in = serial.serial_for_url("socket://localhost:2102", timeout=60)
 

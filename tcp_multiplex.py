@@ -10,6 +10,9 @@ class MultiSocket(object):
 		self.sockets = {}
 		self.lock = threading.Lock()
 
+	def num(self):
+		return len(self.sockets)
+
 	def add(self, socket):
 		fd = socket.fileno()
 		assert fd not in self.sockets
@@ -53,16 +56,23 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def reader(self, conn):
 		print "reader"
 
-		self.server.m.out_sockets.add(conn)
+		in_sockets = self.server.m.in_sockets
+		out_sockets = self.server.m.out_sockets
+
+		out_sockets.add(conn)
 
 		for cmd in iterlines(conn):
 			cmd = cmd.strip()
 			if cmd == '?ping':
 				self.server.m.out_sockets.sendall_one(conn, 'ok\n')
+			elif cmd == '?nin':
+				self.server.m.out_sockets.sendall_one(conn, '%d\n' % (in_sockets.num(),))
+			elif cmd == '?nout':
+				self.server.m.out_sockets.sendall_one(conn, '%d\n' % (out_sockets.num(),))
 			else:
 				self.server.m.in_sockets.sendall(cmd+'\n')
 
-		self.server.m.out_sockets.remove(conn)
+		out_sockets.remove(conn)
 
 class TCPInHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
