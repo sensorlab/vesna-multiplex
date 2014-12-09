@@ -19,6 +19,11 @@ class MultiSocket(object):
 		fd = socket.fileno()
 		del self.sockets[fd]
 
+	def sendall_one(self, s, string):
+		self.lock.acquire()
+		s.sendall(string)
+		self.lock.release()
+
 	def sendall(self, string):
 		self.lock.acquire()
 		for s in self.sockets.itervalues():
@@ -27,6 +32,19 @@ class MultiSocket(object):
 			except socket.error:
 				pass
 		self.lock.release()
+
+def iterlines(s):
+	rest = ""
+	while True:
+		resp = s.recv(1024)
+		if not resp:
+			return
+
+		lines = (rest+resp).split('\n')
+		for line in lines[:-1]:
+			yield line
+
+		rest = lines[-1]
 
 class TCPOutHandler(SocketServer.BaseRequestHandler):
 	def handle(self):
@@ -37,27 +55,12 @@ class TCPOutHandler(SocketServer.BaseRequestHandler):
 
 		self.server.m.out_sockets.add(conn)
 
-		buff = ""
-		while True:
-			resp = conn.recv(1024)
-			if not resp:
-				break
-
-			buff += resp
-
-			print repr(buff)
-
-			if '\n' in buff:
-				cmds = buff.split('\n')
-
-				for cmd in cmds[:-1]:
-					cmd = cmd.strip()
-					if cmd == '?ping':
-						conn.send('ok\n')
-					else:
-						self.server.m.in_sockets.sendall(cmd+'\n')
-
-				buff = cmds[-1]
+		for cmd in iterlines(conn):
+			cmd = cmd.strip()
+			if cmd == '?ping':
+				self.server.m.out_sockets.sendall_one(conn, 'ok\n')
+			else:
+				self.server.m.in_sockets.sendall(cmd+'\n')
 
 		self.server.m.out_sockets.remove(conn)
 
